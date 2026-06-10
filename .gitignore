@@ -19,3 +19,7 @@ Update.exe
 # OS
 Thumbs.db
 desktop.ini
+
+# Claude Code local
+.claude/
+tasks/
