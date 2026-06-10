@@ -12,6 +12,7 @@
     <UseWindowsForms>true</UseWindowsForms> <!-- 시스템 트레이(NotifyIcon)용 -->
     <RootNamespace>IPlaySpeed.App</RootNamespace>
     <AssemblyName>iPlaySpeed</AssemblyName>
+    <StartupObject>IPlaySpeed.App.Program</StartupObject> <!-- 명시적 Main(Velopack 훅 최우선) -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WPF가 manifest로 DPI를 설정하므로 WinForms의 DPI 경고는 무시(트레이만 사용) -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
