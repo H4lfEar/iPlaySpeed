@@ -2,14 +2,13 @@
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
   <assemblyIdentity version="1.0.0.0" name="iPlaySpeed.app" />
 
-  <!-- 관리자 권한으로 실행(requireAdministrator).
-       안티치트 게임(관리자 권한 요구)을 실행할 때 매번 뜨던 UAC 확인창을, 이미 승격된
-       iPlaySpeed가 자식 프로세스로 실행하므로 생략한다. (앱 시작 시 1회만 UAC)
-       단, 비승격 탐색기에서의 드래그앤드롭(UIPI)은 제한될 수 있어 '추가 ▶' 버튼으로 등록한다. -->
+  <!-- asInvoker로 시작한다(Velopack 설치/업데이트 훅이 권한 없이 실행되어야 하므로 필수).
+       실제 게임 관리에 필요한 관리자 권한은 Program.Main에서 '일반 실행일 때만' 스스로
+       관리자로 재실행(self-elevation)해 확보한다. → 설치/업데이트는 UAC 없이, 앱 사용은 UAC 1회. -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
