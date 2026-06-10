@@ -26,7 +26,14 @@ public partial class SettingsWindow : Window
         ChkAutoLearn.IsChecked = settings.AutoLearnThreshold;
         RadCloseOnNext.IsChecked = settings.CloseOnNext;
         RadKeepOnNext.IsChecked = !settings.CloseOnNext;
+
+        ChkStartup.IsChecked = StartupManager.IsEnabled();
+        var ver = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        TxtVersion.Text = ver is null ? "" : $"현재 버전 {ver.Major}.{ver.Minor}.{ver.Build}";
     }
+
+    private void OnCheckUpdate(object sender, RoutedEventArgs e) =>
+        _ = UpdateService.CheckAsync(silentIfNone: false);
 
     private void OnAutoClickChecked(object sender, RoutedEventArgs e)
     {
@@ -69,6 +76,17 @@ public partial class SettingsWindow : Window
         _settings.CloseOnNext = RadCloseOnNext.IsChecked == true;
 
         _store.Save(AppPaths.SettingsFile, _settings);
+
+        // 시작 프로그램 등록 상태가 바뀌었으면 반영
+        bool wantStartup = ChkStartup.IsChecked == true;
+        if (wantStartup != StartupManager.IsEnabled())
+        {
+            if (!StartupManager.SetEnabled(wantStartup))
+                MessageBox.Show(
+                    "시작 프로그램 설정을 변경하지 못했습니다.\n관리자 권한으로 실행 중인지 확인해 주세요.",
+                    "iPlaySpeed", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
         DialogResult = true;
         Close();
     }
