@@ -57,8 +57,9 @@ iPlaySpeed/
    │  └─ CoreLogicTests.cs
    │
    └─ IPlaySpeed.App/                 # ── WPF UI + Windows 연동 ──
-      ├─ app.manifest                 # requireAdministrator(게임 실행 시 UAC 생략), PerMonitorV2 DPI
-      ├─ assets/app.png(.ico)         # 앱/창/트레이 아이콘(있으면 사용, 없으면 폴백 생성)
+      ├─ app.manifest                 # asInvoker(Velopack 훅 호환) + PerMonitorV2 DPI
+      ├─ Program.cs                    # 진입점: Velopack 훅 우선 → 일반 실행 시 self-elevation(관리자 재실행)
+      ├─ assets/app.png(.ico)         # 앱/창/트레이 아이콘(임베드, 없으면 폴백 생성)
       ├─ App.xaml(.cs)                # 색상 리소스 + IconButton 스타일 + 전역 예외 핸들
       ├─ MainWindow.xaml(.cs)         # 2패널(감지/등록), 툴바, 진행도, 드래그앤드롭
       ├─ OverlayWindow.xaml(.cs)      # 항상 위 게이지 오버레이 + 미디어 + 축소
@@ -77,6 +78,7 @@ iPlaySpeed/
          ├─ GameDetector.cs           # 설치 게임 감지(레지스트리+Steam)
          ├─ EpicLauncher.cs           # 에픽 매니페스트 파싱→com.epicgames.launcher:// URI 실행 매핑
          ├─ KnownGames.cs             # 알려진 일퀘 게임 카탈로그/노이즈 필터
+         ├─ UpdateService.cs          # Velopack 자동 업데이트(GitHub Releases 소스)
          ├─ AppIconFactory.cs         # 창/트레이 아이콘(assets 로고 로드 or 폴백 생성)
          ├─ OverlayHelpImage.cs       # 오버레이 조작법 안내 이미지 생성(설정 도움말)
          ├─ MediaController.cs        # SMTC 미디어 제어/메타/시간/출처
