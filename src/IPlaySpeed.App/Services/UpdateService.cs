@@ -21,7 +21,15 @@ public static class UpdateService
 
             // Velopack으로 설치된 경우에만 업데이트 가능(포터블 단일 exe·개발 실행은 제외).
             if (!mgr.IsInstalled)
+            {
+                if (!silentIfNone)
+                    MessageBox.Show(
+                        "이 빌드는 자동 업데이트를 지원하지 않습니다.\n\n" +
+                        "개발 빌드 또는 포터블(단일 exe) 실행으로 보입니다.\n" +
+                        "GitHub 릴리스의 'iPlaySpeed-win-Setup.exe'로 설치한 버전에서 업데이트가 동작합니다.",
+                        "iPlaySpeed 업데이트", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
+            }
 
             UpdateInfo? info = await mgr.CheckForUpdatesAsync().ConfigureAwait(true);
             if (info is null)
