@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="iPlaySpeed.app" />
+
+  <!-- 관리자 권한으로 실행(requireAdministrator).
+       안티치트 게임(관리자 권한 요구)을 실행할 때 매번 뜨던 UAC 확인창을, 이미 승격된
+       iPlaySpeed가 자식 프로세스로 실행하므로 생략한다. (앱 시작 시 1회만 UAC)
+       단, 비승격 탐색기에서의 드래그앤드롭(UIPI)은 제한될 수 있어 '추가 ▶' 버튼으로 등록한다. -->
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+
+  <!-- Per-Monitor DPI 인식: 오버레이 위치/크기가 모니터마다 정확하도록. -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+
+  <!-- 최신 Windows 호환성 선언 -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" /> <!-- Windows 10/11 -->
+    </application>
+  </compatibility>
+</assembly>

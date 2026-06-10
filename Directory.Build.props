@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    모든 프로젝트(.csproj)에 자동 적용되는 공통 빌드 설정.
+    CodePage 65001 = C# 컴파일러가 모든 소스 파일을 UTF-8로 읽도록 강제한다.
+    이렇게 하면 한글 주석/문자열이 시스템 코드페이지(예: 한국어 Windows의 CP949)로
+    잘못 해석되어 깨지는 일을 BOM 유무와 상관없이 방지한다.
+  -->
+  <PropertyGroup>
+    <CodePage>65001</CodePage>
+  </PropertyGroup>
+</Project>

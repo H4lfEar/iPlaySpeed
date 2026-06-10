@@ -1,0 +1,168 @@
+<Window x:Class="IPlaySpeed.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="iPlaySpeed" Height="680" Width="860"
+        MinHeight="520" MinWidth="720"
+        Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterScreen">
+
+    <Window.Resources>
+        <!-- 이 창의 모든 버튼을 배경 박스 없는 흰색 아이콘 스타일로 -->
+        <Style TargetType="Button" BasedOn="{StaticResource IconButton}" />
+    </Window.Resources>
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 헤더 -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="iPlaySpeed" FontSize="24" FontWeight="Bold" Foreground="{StaticResource TextBrush}" />
+            <TextBlock Text="내 PC의 게임을 끌어다 등록하고, 다음 게임은 버튼 하나로." Foreground="{StaticResource SubtleBrush}" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- 진행도 -->
+        <Border Grid.Row="1" Background="{StaticResource PanelBrush}" CornerRadius="10" Padding="14" Margin="0,14,0,0">
+            <StackPanel>
+                <DockPanel>
+                    <TextBlock Text="오늘 진행도" Foreground="{StaticResource SubtleBrush}" />
+                    <TextBlock Text="{Binding ProgressText}" HorizontalAlignment="Right" Foreground="{StaticResource TextBrush}" FontWeight="Bold" />
+                </DockPanel>
+                <ProgressBar Value="{Binding ProgressPercent, Mode=OneWay}" Maximum="100" Height="14" Margin="0,8,0,0"
+                             Background="#1A1B22" Foreground="{StaticResource DoneBrush}" BorderThickness="0" />
+                <TextBlock Margin="0,8,0,0" Foreground="{StaticResource SubtleBrush}">
+                    <Run Text="현재: " /><Run Text="{Binding CurrentGameName, Mode=OneWay}" Foreground="{StaticResource AccentBrush}" />
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- 툴바 -->
+        <DockPanel Grid.Row="2" Margin="0,14,0,0" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Content="오버레이 표시/숨김" Click="OnToggleOverlay" Margin="0,0,8,0" Padding="12,7" />
+            <Button DockPanel.Dock="Left" Content="▶ 다음 게임" Click="OnNextGame" Margin="0,0,8,0" Padding="12,7" />
+            <Button DockPanel.Dock="Left" Content="⚙ 설정" Click="OnSettings" Margin="0,0,8,0" Padding="12,7" />
+            <Button DockPanel.Dock="Left" Content="↺ 진행도 초기화" Click="OnResetProgress" Margin="0,0,8,0" Padding="12,7"
+                    ToolTip="오늘 진행도를 즉시 0%로 되돌립니다" />
+            <CheckBox DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource TextBrush}"
+                      IsChecked="{Binding AutoSortByPatch, Mode=TwoWay}"
+                      Content="업데이트 주기로 자동 정렬" ToolTip="끄면 ▲▼로 직접 순서를 바꿀 수 있습니다." />
+        </DockPanel>
+
+        <!-- 본문: 좌(감지) / 우(등록) -->
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 좌: 감지된 게임 -->
+            <Border Grid.Column="0" Background="{StaticResource PanelBrush}" CornerRadius="10">
+                <DockPanel Margin="10">
+                    <DockPanel DockPanel.Dock="Top" Margin="2,2,2,8">
+                        <TextBlock Text="내 PC의 게임 (감지됨)" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Content="↻ 리스캔" Click="OnRescan" Padding="8,3" />
+                    </DockPanel>
+                    <TextBlock x:Name="DetectStatus" DockPanel.Dock="Bottom" Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="2,6,2,0"
+                               Text="오른쪽으로 끌어다 놓거나 '추가'를 누르세요." TextWrapping="Wrap" />
+                    <ListBox x:Name="DetectedList" Background="Transparent" BorderThickness="0"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             PreviewMouseLeftButtonDown="OnDetectedMouseDown"
+                             PreviewMouseMove="OnDetectedMouseMove">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Margin="2" CornerRadius="8" Background="#33000000">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Image Grid.Column="0" Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrush}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding Source}" Foreground="{StaticResource SubtleBrush}" FontSize="10" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="추가 ▶" Click="OnAddDetected" Padding="8,3" VerticalAlignment="Center" />
+                                            <Button Content="✕" Click="OnHideDetected" Padding="6,3" Margin="4,0,0,0"
+                                                    VerticalAlignment="Center" ToolTip="이 항목을 목록에서 숨기기 (게임 아님)" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- 우: 등록된 게임 (드롭 대상) -->
+            <Border Grid.Column="2" x:Name="RegisteredDropZone" Background="{StaticResource PanelBrush}" CornerRadius="10"
+                    AllowDrop="True" Drop="OnDropToRegistered" DragEnter="OnDragEnterRegistered" DragLeave="OnDragLeaveRegistered">
+                <DockPanel Margin="10">
+                    <DockPanel DockPanel.Dock="Top" Margin="2,2,2,8">
+                        <TextBlock Text="등록된 게임 (오버레이 표시)" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Content="＋ 직접 추가" Click="OnRegisterGame" Padding="8,3" />
+                    </DockPanel>
+                    <ListBox x:Name="GameList" ItemsSource="{Binding Rows}" Background="Transparent" BorderThickness="0"
+                             HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="8,6" Margin="2" CornerRadius="8" Background="#33000000">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- 수동 정렬 ▲▼ (누르면 자동정렬을 끄고 이동) -->
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0">
+                                            <Button Content="▲" Click="OnMoveUp" Style="{StaticResource IconButton}"
+                                                    FontSize="12" Height="18" ToolTip="위로 이동 (수동 정렬로 전환)" />
+                                            <Button Content="▼" Click="OnMoveDown" Style="{StaticResource IconButton}"
+                                                    FontSize="12" Height="18" Margin="0,2,0,0" ToolTip="아래로 이동" />
+                                        </StackPanel>
+
+                                        <Image Grid.Column="1" Source="{Binding Icon}" Width="32" Height="32" Margin="0,0,8,0" VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding StatusText}" Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="0,1,0,0" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border Background="#22000000" CornerRadius="5" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                    ToolTip="이 시간(분) 이상 실제 플레이하면 완료로 인정">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBox Width="28" Text="{Binding ThresholdMinutes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                             LostFocus="OnThresholdChanged" TextAlignment="Center"
+                                                             Background="Transparent" Foreground="{StaticResource TextBrush}" BorderThickness="0" />
+                                                    <TextBlock Text="분" Foreground="{StaticResource SubtleBrush}" FontSize="11" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Button Content="실행" Click="OnLaunchRow" Padding="9,4" Margin="0,0,5,0" />
+                                            <Button Content="완료" Click="OnToggleManualRow" Padding="8,4" Margin="0,0,5,0" ToolTip="수동 완료/미완료 전환" />
+                                            <Button Content="✕" Click="OnRemoveRow" Style="{StaticResource IconButton}" FontSize="13" ToolTip="등록 해제" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- 안내 -->
+        <TextBlock Grid.Row="4" Margin="0,12,0,0" TextWrapping="Wrap" Foreground="{StaticResource SubtleBrush}" FontSize="12"
+                   Text="팁: 전체화면 독점 모드에서는 오버레이가 보이지 않습니다. 게임을 '테두리 없는 창모드'로 두세요. 단축키(기본 Ctrl+Alt+I)로 오버레이를 켜고 끌 수 있습니다." />
+    </Grid>
+</Window>

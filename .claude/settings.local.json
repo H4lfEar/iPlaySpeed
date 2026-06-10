@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build *)",
+      "Bash(taskkill /IM iPlaySpeed.exe /F)",
+      "Bash(dotnet test *)",
+      "PowerShell(if \\(Get-Process -Name iPlaySpeed -ErrorAction SilentlyContinue\\) { Start-Process -FilePath \"taskkill.exe\" -ArgumentList '/IM','iPlaySpeed.exe','/F' -Verb RunAs; Start-Sleep -Seconds 2 }; \"done\")"
+    ]
+  }
+}

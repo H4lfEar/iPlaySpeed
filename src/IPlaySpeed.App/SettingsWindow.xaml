@@ -1,0 +1,75 @@
+<Window x:Class="IPlaySpeed.App.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="iPlaySpeed 설정" Height="640" Width="440"
+        Background="{StaticResource BgBrush}"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="일일 런 시작(리셋) 시각" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
+            <TextBlock Text="이 시각이 지나면 진행도가 자동으로 0%로 초기화됩니다." Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="0,2,0,6" />
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                <TextBox x:Name="TxtHour" Width="50" />
+                <TextBlock Text="시" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="4,0,12,0" />
+                <TextBox x:Name="TxtMinute" Width="50" />
+                <TextBlock Text="분" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="4,0,0,0" />
+            </StackPanel>
+
+            <TextBlock Text="기본 패치 주기(일)" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
+            <TextBlock Text="패치 이력이 쌓이기 전 임시로 쓰는 값. 실제 패치를 2회 이상 관측하면 자동 학습값이 이 값을 대체합니다." Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="0,2,0,6" TextWrapping="Wrap" />
+            <TextBox x:Name="TxtInterval" Width="80" HorizontalAlignment="Left" Margin="0,0,0,14" />
+
+            <TextBlock Text="단축키" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" />
+            <Grid Margin="0,4,0,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="오버레이 토글  " Foreground="{StaticResource SubtleBrush}" VerticalAlignment="Center" />
+                <TextBox Grid.Row="0" Grid.Column="1" x:Name="TxtOverlayKey" Margin="0,0,0,6" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="다음 게임  " Foreground="{StaticResource SubtleBrush}" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" x:Name="TxtNextKey" />
+            </Grid>
+            <TextBlock Text="예: Ctrl+Alt+I  (Ctrl/Alt/Shift/Win + 글자/숫자/F1~F12)" Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="0,-8,0,14" />
+
+            <CheckBox x:Name="ChkCountWhileRunning" Foreground="{StaticResource TextBrush}"
+                      Content="백그라운드(alt+tab) 중에도 시간 누적" Margin="0,0,0,2" />
+            <TextBlock Text="포그라운드가 아니어도 게임이 실행 중이면 시간을 누적합니다. 자동 진행 턴제 게임에 유용."
+                       Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="22,0,0,10" TextWrapping="Wrap" />
+
+            <CheckBox x:Name="ChkAutoLearn" Foreground="{StaticResource TextBrush}"
+                      Content="평소 플레이 시간을 학습해 완료 시간 자동 설정" Margin="0,0,0,2" />
+            <TextBlock Text="매일 실제 플레이 시간을 기록해, 평소보다 조금 일찍 완료되도록 게임별 완료 시간을 자동 조정합니다."
+                       Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="22,0,0,10" TextWrapping="Wrap" />
+
+            <TextBlock Text="'다음' 버튼 동작" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" Margin="0,0,0,2" />
+            <RadioButton x:Name="RadCloseOnNext" GroupName="NextMode" Foreground="{StaticResource TextBrush}"
+                         Content="현재 게임을 바로 종료한 뒤 다음 게임 실행" Margin="0,2,0,2" />
+            <RadioButton x:Name="RadKeepOnNext" GroupName="NextMode" Foreground="{StaticResource TextBrush}"
+                         Content="현재 게임을 종료하지 않고 다음 게임 실행 (동시 진행)" Margin="0,0,0,2" />
+            <TextBlock Text="여러 게임을 동시에 켜 두고 일퀘를 진행하려면 아래(종료하지 않음)를 선택하세요."
+                       Foreground="{StaticResource SubtleBrush}" FontSize="11" Margin="22,0,0,12" TextWrapping="Wrap" />
+
+            <CheckBox x:Name="ChkAutoClick" Foreground="{StaticResource TextBrush}"
+                      Content="런처 '플레이' 버튼 자동 클릭 사용 (위험)" Checked="OnAutoClickChecked" />
+            <TextBlock Text="⚠ 게임사 약관 위반·계정 정지 위험이 있습니다. 기본은 꺼짐이며, 자동 로그인/비밀번호 입력은 하지 않습니다."
+                       Foreground="#E0A050" FontSize="11" Margin="22,2,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <DockPanel Grid.Row="1" Margin="0,12,0,0" LastChildFill="False">
+            <Button DockPanel.Dock="Left" Content="❓ 오버레이 조작법" Click="OnShowHelp" Padding="12,6" />
+            <Button DockPanel.Dock="Right" Content="저장" Click="OnSave" Padding="14,6" />
+            <Button DockPanel.Dock="Right" Content="취소" Click="OnCancel" Padding="14,6" Margin="0,0,8,0" />
+        </DockPanel>
+    </Grid>
+</Window>
