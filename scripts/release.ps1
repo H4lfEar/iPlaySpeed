@@ -11,7 +11,7 @@
 
 param(
     [Parameter(Mandatory = $true)][string]$Version,
-    [Parameter(Mandatory = $true)][string]$Token
+    [string]$Token
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,6 +21,20 @@ $repo = "https://github.com/H4lfEar/iPlaySpeed"
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
     throw "Version must be 3-part SemVer (e.g. 0.1.1). Got: $Version"
+}
+
+# Token resolution: -Token arg -> secrets\github_token.txt -> %AppData%\iPlaySpeed\github_token.txt
+if (-not $Token) {
+    $candidates = @(
+        (Join-Path $root "secrets\github_token.txt"),
+        (Join-Path $env:APPDATA "iPlaySpeed\github_token.txt")
+    )
+    foreach ($f in $candidates) {
+        if (Test-Path $f) { $Token = (Get-Content $f -Raw).Trim(); break }
+    }
+}
+if (-not $Token) {
+    throw "No token. Pass -Token, or save the PAT to secrets\github_token.txt (gitignored)."
 }
 
 # Ensure vpk tool is available

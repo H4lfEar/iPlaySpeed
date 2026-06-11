@@ -24,5 +24,10 @@ desktop.ini
 .claude/
 tasks/
 
+# Secrets - NEVER commit (GitHub PAT etc.)
+secrets/
+*.token
+github_token.txt
+
 # unrelated
 sekiro-parry/
