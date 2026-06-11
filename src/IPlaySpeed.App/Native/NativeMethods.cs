@@ -46,6 +46,22 @@ internal static class NativeMethods
         finally { CloseHandle(h); }
     }
 
+    // ── 단일 인스턴스(기존 창 깨우기) ──
+    internal static readonly IntPtr HWND_BROADCAST = new(0xFFFF);
+    internal const uint MSGFLT_ALLOW = 1;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern uint RegisterWindowMessage(string lpString);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    // 낮은 무결성(비승격) 프로세스가 보낸 메시지를 승격 창이 받도록 허용(UIPI 우회).
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ChangeWindowMessageFilterEx(IntPtr hwnd, uint message, uint action, IntPtr changeInfo);
+
     // ── 전역 단축키 ──
     [DllImport("user32.dll", SetLastError = true)]
     internal static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);

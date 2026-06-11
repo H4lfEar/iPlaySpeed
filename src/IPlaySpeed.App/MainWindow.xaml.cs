@@ -35,8 +35,7 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         Icon = AppIconFactory.WindowIcon(); // 창/작업표시줄 아이콘
-        StateChanged += OnStateChanged;     // 최소화 시 트레이로
-        Closing += OnClosing;               // 닫기(X) 시 종료 대신 트레이로
+        Closing += OnClosing;               // 닫기(X) 시 종료 대신 트레이로 (최소화는 작업표시줄 유지)
 
         _store = new JsonStore(AppPaths.DataDir);
         _settings = _store.Load(AppPaths.SettingsFile, new AppSettings());
@@ -248,11 +247,24 @@ public partial class MainWindow : Window
         _tray.DoubleClick += (_, _) => ShowFromTray();
     }
 
-    private void OnStateChanged(object? sender, EventArgs e)
+    // 단일 인스턴스: 다른(비승격) 인스턴스가 보낸 '창 표시' 브로드캐스트를 받기 위한 후킹.
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        // 최소화하면 작업표시줄에서 사라지고 트레이에만 남는다(오버레이·엔진은 계속 동작).
-        if (WindowState == WindowState.Minimized)
-            Hide();
+        base.OnSourceInitialized(e);
+        IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook(WndProc);
+        // 비승격 프로세스가 보낸 등록 메시지가 승격 창에 닿도록 허용.
+        NativeMethods.ChangeWindowMessageFilterEx(hwnd, AppInstance.ShowMessage, NativeMethods.MSGFLT_ALLOW, IntPtr.Zero);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if ((uint)msg == AppInstance.ShowMessage)
+        {
+            ShowFromTray(); // 트레이/최소화 상태에서 복원 + 활성화
+            handled = true;
+        }
+        return IntPtr.Zero;
     }
 
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
