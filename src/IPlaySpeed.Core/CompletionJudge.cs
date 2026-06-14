@@ -12,7 +12,7 @@ public static class CompletionJudge
     /// - 활성 플레이(게임 창 foreground 누적)가 임계치 이상이면 완료.
     /// - 업데이트가 감지됐는데 플레이가 모자라면 UpdateOnly(껐다 켰을 뿐 = 미완료).
     /// </summary>
-    public static GameStatus Judge(GameDailyState s, int thresholdMinutes)
+    public static GameStatus Judge(GameDailyState s, int thresholdMinutes, bool actionBased = false)
     {
         if (s.ManualOverride == true)
             return GameStatus.Completed;
@@ -43,7 +43,7 @@ public static class CompletionJudge
     /// 한 게임의 완료까지 진행 비율(0~1). 아이콘 '차오름' 표시에 사용한다.
     /// 수동 완료=1, 임계 시간 대비 누적 플레이 시간의 비율(최대 1).
     /// </summary>
-    public static double ProgressRatio(GameDailyState s, int thresholdMinutes)
+    public static double ProgressRatio(GameDailyState s, int thresholdMinutes, bool actionBased = false)
     {
         if (s.ManualOverride == true)
             return 1.0;
@@ -79,13 +79,14 @@ public static class CompletionJudge
 
     /// <summary>전체 진행도(%) = 완료된 게임 수 / 전체 게임 수.</summary>
     public static double ProgressPercent(
-        IReadOnlyList<(GameDailyState state, int thresholdMinutes)> games)
+        IReadOnlyList<(GameDailyState state, int thresholdMinutes)> games,
+        bool actionBased = false)
     {
         if (games.Count == 0)
             return 0.0;
         int done = 0;
         foreach (var (state, threshold) in games)
-            if (Judge(state, threshold) == GameStatus.Completed)
+            if (Judge(state, threshold, actionBased) == GameStatus.Completed)
                 done++;
         return (double)done / games.Count * 100.0;
     }

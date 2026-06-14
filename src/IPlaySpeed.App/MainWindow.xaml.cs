@@ -198,9 +198,15 @@ public partial class MainWindow : Window
     {
         if (sender is not TextBox tb || tb.DataContext is not GameRow row) return;
         if (int.TryParse(tb.Text.Trim(), out int v))
+        {
             _engine.SetThreshold(row, v);
+            if (_overlay?.IsVisible == true)
+                _overlay.Render();
+        }
+        else if (string.IsNullOrWhiteSpace(tb.Text))
+            return; // 입력 중
         else
-            tb.Text = row.ThresholdMinutes.ToString(); // 잘못된 입력 되돌림
+            tb.Text = row.ThresholdMinutes.ToString();
     }
 
     private void OnLaunchRow(object sender, RoutedEventArgs e)

@@ -1,8 +1,20 @@
 # iPlaySpeed — 개발 설계서 (design.md)
 
-> 멀티 게임 일일퀘스트 오버레이 런처 · Claude Code 핸드오프용 구현 설계서
+> 멀티 게임 일일퀘스트 오버레이 런처 · **에이전트/개발 핸드오프**용 구현 설계서
 > 이 문서는 **현재 코드베이스의 실제 상태**와 **이어서 구현할 작업**을 정리한다.
 > 기획 의도/배경은 `iPlaySpeed_기술설계문서.md`, 사용자용 안내는 `README.md` 참고.
+
+**새 채팅 시작 시 읽기 순서**
+
+| 순서 | 파일 | 내용 |
+|---|---|---|
+| 1 | `design.md` (본 문서) | 파일 맵·API·구현 상태 |
+| 2 | `tasks/iPlaySpeed/HANDOFF.md` | 2026-06-14 UX·NIKKE·빌드 절차 |
+| 3 | `tasks/iPlaySpeed/lessons.md` | 회귀 함정 L1–L6 |
+| 4 | `.cursor/rules/iPlaySpeed.md` | Cursor 에이전트 요약 규칙 |
+| 5 | `tasks/iPlaySpeed/00_PhaseOverview.md` | Phase 진행·다음 작업 |
+
+`tasks/`는 `.gitignore` — 로컬 작업 메모. repo 공유 시 `design.md`·`HANDOFF.md` 커밋 여부는 사용자 결정.
 
 ---
 
@@ -146,20 +158,17 @@ Windows API/UI는 `IPlaySpeed.App`에만 둔다. 새 로직 추가 시 가능하
   PROCESS_QUERY_LIMITED_INFORMATION)로 얻는다. → **관리자 권한 게임(안티치트, HoYo 등)도 경로를 읽어**
   폴더 매칭이 동작한다. (구버전의 `MainModule.FileName`은 권한 부족으로 null이 되어 시간이 안 쌓였음)
 
-**다음 게임 — `NextGame()`**:
-- 오버레이(Topmost) 버튼을 누르면 게임이 포그라운드를 잃어 `_currentRow`가 null이 되므로,
-  **`_lastGameRow`(가장 최근 포그라운드 게임, 우리 앱 창으로 포커스가 와도 유지)** 를 기준으로 한다.
-- 단, `_lastGameRow`는 게임을 닫은 뒤에도 남으므로 **`IsGameRunning`으로 실제 실행 여부를 확인**한다.
-  실행 중이면 닫고 그 **다음 인덱스부터 순환**해 첫 미완료 실행, **실행 중이 아니면 맨 위(1번)부터**.
-  (이 확인이 없으면 '아무 게임도 안 떠 있을 때 다음을 눌러도 맨 위 게임을 건너뛰는' 버그가 난다.)
-- 실행한 게임을 `_lastGameRow`로 즉시 설정해 연속 '다음'·볼륨 대상이 바로 따라간다.
-- **직전 게임이 이미 꺼졌고 미완료(임계 시간 미만)면 → 같은 게임을 다시 실행**(업데이트 재시작 등 대응).
-  완료된 게임이면 그 다음 미완료 게임으로 진행.
-- **`CloseOnNext`(설정)**: ON이면 현재 게임을 바로 종료(`CloseGame(forceKill:true)`)한 뒤 다음 실행,
-  OFF이면 **종료하지 않고 다음 게임만 실행**(여러 게임 동시 진행). `CountWhileRunning`과 함께 쓰면 동시 일퀘에 유용.
-- **진행도 리셋 직후**(`ForceResetProgress`)에는 1회성 플래그로 실행 중 게임을 무시하고 **맨 위(첫 미완료)부터** 실행.
-- 실행 중 판정은 `IsRealGameRunning`(런처/헬퍼 제외, 권한 높은 프로세스 경로도 조회).
-- `FindNextToPlay(startIdx, exclude)`가 순환 탐색 담당.
+**다음 게임 — `NextGame()`** (2026-06-14, `tasks/iPlaySpeed/HANDOFF.md` 참고):
+- **실행 중 2개+**: 완료 없음. `Rows` **인덱스 최대** 실행 게임 다음 순번 중 **미실행** 게임 `LaunchGame`.
+- **실행 0~1개**: `_lastGameRow` 완료 → (`CloseOnNext`) 종료 → 다음 미완료로 **포인터만** (Launch 없음).
+- `_lastGameRow` / `IsRealGameRunning` / `FindNextToPlay` — 볼륨·다음 기준은 `_currentRow`가 아님.
+- `ForceResetProgress` 후 첫 「다음」: 첫 미완료 포인터만.
+
+**아이콘 실행 — `PlayGame(row)`**: Launch만. 타 게임 종료·완료 없음.
+
+**완료**: 시간 ≥ 임계 · 「다음」(1개) · 사용자 종료 · 우클릭. `ProgressRatio`는 항상 시간 비율 표시.
+
+**`SetThreshold`**: 즉시 저장, `ThresholdUserSet`, 오버레이 `VisualStateChanged`.
 
 **게임 종료 — `CloseGame(entry)`**: (1) 등록 프로세스 이름 + (2) **`GameFolder` 안에서 실행된 프로세스**를
 모두 모아 `CloseMainWindow` 후 5초 뒤에도 살아있으면 `Kill`. → 런처로 켠 실제 게임까지 닫음.
@@ -236,10 +245,10 @@ Windows API/UI는 `IPlaySpeed.App`에만 둔다. 새 로직 추가 시 가능하
 
 ## 7. 데이터 모델 / 저장 (`%AppData%\iPlaySpeed\`)
 
-- `games.json` — `List<GameEntry>` (Id, Name, IconPath, ExePath, GameProcessName, GameFolder, LauncherType, Order, ThresholdMinutes)
+- `games.json` — `List<GameEntry>` (Id, Name, IconPath, ExePath, GameProcessName, GameFolder, LauncherType, Order, ThresholdMinutes, **ProcessHints**, **ThresholdUserSet**)
 - `states.json` — `Dictionary<string,GameDailyState>` (ActivePlaySeconds, UpdateDetectedToday, ManualOverride)
 - `patches.json` — `List<GamePatchInfo>` (GameId, ObservedPatchDates, LastFolderWrite, LastTotalBytes)
-- `settings.json` — `AppSettings` (ResetHour/Minute, DefaultPatchIntervalDays, AutoSortByPatch, DefaultThresholdMinutes, OverlayHotkey, NextGameHotkey, LastReset, LauncherAutoClickEnabled, **CountWhileRunning**, **CloseOnNext**, **AutoLearnThreshold**, OverlayLeft/Top)
+- `settings.json` — `AppSettings` (…, **ActionBasedCompletion**, CloseOnNext, CountWhileRunning, AutoLearnThreshold, …)
 - `hidden.json` — `List<string>` 감지 목록에서 사용자가 숨긴(게임 아님) 항목 키
 - `playlog.json` — `Dictionary<string,List<int>>` 게임별 최근 14일 실제 플레이 시간(초). 완료 시간 자동 학습용.
 - `history.json` — `List<DailyRecord>` (Date, CompletedGames, TotalGames, TotalMinutes, Start/EndTime)
@@ -258,23 +267,27 @@ Windows API/UI는 `IPlaySpeed.App`에만 둔다. 새 로직 추가 시 가능하
 6. **방어적 코드**: 레지스트리/프로세스/파일 접근은 전부 try/catch로 감싸 앱이 죽지 않게.
 7. **오버레이 한계**: 독점 전체화면 위엔 안 뜸 → 게임을 테두리 없는 창모드로(사용자 안내).
 8. **전역 예외**: `App.OnStartup`에서 `DispatcherUnhandledException`을 잡아 메시지로 표시.
+9. **빌드·배포**: iPlaySpeed는 **관리자 승격** 실행 → exe가 DLL 잠금. 코드 반영 전 **프로세스 종료 필수** (`빌드_및_실행.bat` 또는 RunAs taskkill). 자세히 `tasks/iPlaySpeed/lessons.md` L1.
+10. **ProgressRatio vs Judge**: actionBased 모드에서도 **아이콘 채움은 시간 비율**. Judge만 ManualOverride·시간·UpdateOnly 처리.
+11. **런처 gameFolder**: `...\Launcher` 등록 시 `GameLibrary.WidenGameFolder`로 상위 루트 사용. `ProcessMatcher` 힌트 폴백(NIKKE 등).
+12. **임계값 UI**: PropertyChanged + `ThresholdUserSet` → 자동 학습과 충돌 방지.
 
 ---
 
 ## 9. 구현 완료 / 남은 작업
 
 ### ✅ 구현됨
-게임 등록(직접/감지/드래그) · 항상위 오버레이 게이지+체크포인트 · 포그라운드(폴더매칭) 시간 누적 완료판정 ·
-업데이트 오판정 방지 · 다음게임(순환·런처 보정) · 전역 단축키 · 일일 자동 리셋 + 수동 초기화 ·
-패치 자동학습 정렬(자동/수동 토글, ▲▼) · 게임별 완료 임계(분) · SMTC 미디어 제어 · 재생시간(보간)·제목 마퀴·
-출처 아이콘 · 오버레이 축소 · IconButton UI · **볼륨 분리 슬라이더(게임/미디어, CoreAudio)**.
+게임 등록(직접/감지/드래그) · 항상위 오버레이 게이지+체크포인트 · 포그라운드(폴더·ProcessHints) 시간 누적 ·
+업데이트 오판정 방지 · **하이브리드 완료(시간+다음+종료)** · **다음/아이콘 UX 분리(2026-06-14)** ·
+전역 단축키 · 일일 자동 리셋 · 패치 자동학습 정렬 · 게임별 완료 임계(즉시 반영) · SMTC 미디어 ·
+볼륨 분리 · 오버레이 축소 · Velopack · 트레이 · **NIKKE/런처 ProcessHints·gameFolder 보정**.
 
 ### ⬜ 남은 작업 (우선순위 제안)
-1. **리더보드 화면** — `history.json` 시각화(일별 소요시간 추이). LiveCharts2 등.
-2. **런처 자동 클릭(실 동작)** — 현재는 설정 토글만. 동의 시 UI Automation으로 "플레이" 버튼 탐색 →
-   실패 시 좌표 보정 → `SendInput`으로 **실제 마우스 클릭**. 비번 자동화 금지. ToS/계정 리스크 경고 유지.
-3. **게임별 리셋 시각/프로세스명 편집 UI** — 감지가 런처 exe를 잡는 경우 실제 게임 프로세스명을 사용자가 보정.
-4. **시작 시 자동 실행/트레이 상주**, 다중 모니터 오버레이 위치 보정 등 편의 기능.
+1. **리더보드 화면** — `history.json` 시각화.
+2. **런처 자동 클릭(실 동작)** — 설정 토글만. UI Automation + SendInput, ToS 경고 유지.
+3. **게임별 프로세스명 편집 UI** — `GameProcessName` / `ProcessHints` 수동 보정.
+4. **README.md** outdated 항목 동기화(볼륨·완료 UX·트레이).
+5. **`DebugLog.cs` 제거**(선택) — NIKKE 디버그용.
 
 ### 알려진 개선 여지
 - `CloseGame`/출처아이콘이 전체 프로세스를 열거 → Next 누를 때 짧은 지연 가능(필요 시 백그라운드화).
@@ -296,4 +309,6 @@ dotnet test src/IPlaySpeed.Core.Tests/IPlaySpeed.Core.Tests.csproj
 dotnet run --project src/IPlaySpeed.App/IPlaySpeed.App.csproj -c Release
 ```
 
-새 기능 작업 흐름: **Core에 규칙 추가 → xUnit 테스트 GREEN → App에서 호출/UI 연결 → 빌드 확인.**
+새 기능 작업 흐름: **Core에 규칙 추가 → xUnit 테스트 GREEN → App에서 호출/UI 연결 → iPlaySpeed 종료 후 빌드 확인.**
+
+에이전트/새 채팅: `tasks/iPlaySpeed/HANDOFF.md` + `lessons.md` + `.cursor/rules/iPlaySpeed.md` 참고.

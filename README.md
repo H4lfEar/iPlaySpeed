@@ -70,14 +70,12 @@ https://dotnet.microsoft.com/download/dotnet/8.0 에서 **".NET 8 SDK" (Windows 
 
 ```
 iPlaySpeed/
-├─ iPlaySpeed.sln              ← Visual Studio용 솔루션
-├─ 빌드_및_실행.bat            ← 더블클릭으로 테스트+실행
-├─ README.md
-├─ iPlaySpeed_기술설계문서.md   ← 전체 설계/로드맵
-└─ src/
-   ├─ IPlaySpeed.Core/         ← 검증된 순수 로직(판정·예측·저장)
-   ├─ IPlaySpeed.Core.Tests/   ← 28개 검증 테스트
-   └─ IPlaySpeed.App/          ← WPF 화면(메인창·오버레이·설정)
+├─ iPlaySpeed.sln
+├─ 빌드_및_실행.bat
+├─ design.md                    ← 구현 핸드오프 (에이전트 1순위)
+├─ .cursor/rules/iPlaySpeed.md  ← Cursor 규칙
+├─ tasks/iPlaySpeed/             ← lessons, HANDOFF, PhaseOverview (gitignore)
+└─ src/ ...
 ```
 
 데이터는 `%AppData%\iPlaySpeed\` 에 JSON으로 저장됩니다 (`games.json`, `states.json`, `patches.json`, `settings.json`, `history.json`).

@@ -33,6 +33,25 @@ public sealed class GameEntry
     /// <summary>완료로 인정할 최소 활성 플레이 시간(분). 게임마다 다를 수 있음.</summary>
     public int ThresholdMinutes { get; set; } = 5;
 
+    /// <summary>사용자가 수동으로 임계 시간을 정했으면 true(자동 학습이 덮어쓰지 않음).</summary>
+    public bool ThresholdUserSet { get; set; }
+
+    /// <summary>
+    /// 포그라운드/실행 중 프로세스명 매칭 폴백 키워드(예: nikke).
+    /// 런처 타입 게임에서 exe 경로를 못 읽을 때 사용.
+    /// </summary>
+    public List<string> ProcessHints { get; set; } = new();
+
+    /// <summary>ProcessHints 또는 GameProcessName 목록(매칭용).</summary>
+    public IEnumerable<string> AllProcessHints()
+    {
+        if (!string.IsNullOrWhiteSpace(GameProcessName))
+            yield return GameProcessName!;
+        foreach (string h in ProcessHints)
+            if (!string.IsNullOrWhiteSpace(h))
+                yield return h;
+    }
+
     /// <summary>이 게임의 ExePath 파일명(확장자 제외)을 프로세스명으로 반환.</summary>
     public string EffectiveGameProcessName()
     {
@@ -132,4 +151,9 @@ public sealed class AppSettings
 
     /// <summary>오버레이 마지막 위치 Y.</summary>
     public double OverlayTop { get; set; } = 8;
+
+    /// <summary>
+    /// true(기본): 「다음」버튼·게임 종료로 완료. false: 기존처럼 플레이 시간 임계값으로 완료.
+    /// </summary>
+    public bool ActionBasedCompletion { get; set; } = true;
 }

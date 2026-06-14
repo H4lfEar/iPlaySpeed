@@ -15,6 +15,53 @@ public sealed class GameLibrary
     {
         _store = store;
         Games = _store.Load(AppPaths.GamesFile, new List<GameEntry>());
+        MigrateKnownGameMetadata();
+    }
+
+    /// <summary>기존 등록 게임에 카탈로그 ProcessHints·런처 프로세스명 보정.</summary>
+    private void MigrateKnownGameMetadata()
+    {
+        bool changed = false;
+        foreach (var g in Games)
+        {
+            var known = KnownGames.Match(g.Name);
+            if (known is null) continue;
+            if (g.ProcessHints.Count == 0 && known.ProcessHints.Length > 0)
+            {
+                g.ProcessHints = known.ProcessHints.ToList();
+                changed = true;
+            }
+            if (!string.Equals(g.LauncherType, "none", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(g.GameProcessName)
+                && LauncherFilter.IsLauncherOrHelper(g.GameProcessName))
+            {
+                g.GameProcessName = null;
+                changed = true;
+            }
+            string? widened = WidenGameFolder(g.GameFolder);
+            if (widened is not null && !string.Equals(g.GameFolder, widened, StringComparison.OrdinalIgnoreCase))
+            {
+                g.GameFolder = widened;
+                changed = true;
+            }
+        }
+        if (changed) Save();
+    }
+
+    /// <summary>등록 폴더가 .../Launcher 를 가리키면 상위(실제 게임 루트)로 넓힌다.</summary>
+    private static string? WidenGameFolder(string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) return null;
+        try
+        {
+            string name = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (!name.Equals("Launcher", StringComparison.OrdinalIgnoreCase)
+                && !name.Equals("launcher", StringComparison.OrdinalIgnoreCase))
+                return null;
+            string? parent = Path.GetDirectoryName(folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return string.IsNullOrWhiteSpace(parent) ? null : parent;
+        }
+        catch { return null; }
     }
 
     public void Save() => _store.Save(AppPaths.GamesFile, Games);
@@ -51,6 +98,10 @@ public sealed class GameLibrary
     {
         string finalName = string.IsNullOrWhiteSpace(name) ? DeriveName(exePath) : name.Trim();
         string id = UniqueId(finalName);
+        var known = KnownGames.Match(finalName);
+        string lt = string.IsNullOrWhiteSpace(launcherType) ? "none" : launcherType;
+        if (known is not null && !string.Equals(lt, "none", StringComparison.OrdinalIgnoreCase))
+            lt = known.LauncherType;
 
         var entry = new GameEntry
         {
@@ -58,10 +109,13 @@ public sealed class GameLibrary
             Name = finalName,
             ExePath = exePath ?? "",
             GameFolder = installDir ?? (string.IsNullOrEmpty(exePath) ? null : Path.GetDirectoryName(exePath)),
-            GameProcessName = string.IsNullOrEmpty(exePath) ? null : Path.GetFileNameWithoutExtension(exePath),
+            GameProcessName = known is not null && !string.Equals(lt, "none", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : (string.IsNullOrEmpty(exePath) ? null : Path.GetFileNameWithoutExtension(exePath)),
             Order = Games.Count,
             ThresholdMinutes = 5,
-            LauncherType = string.IsNullOrWhiteSpace(launcherType) ? "none" : launcherType
+            LauncherType = lt,
+            ProcessHints = known?.ProcessHints.ToList() ?? new List<string>()
         };
 
         if (!string.IsNullOrEmpty(exePath))

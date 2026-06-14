@@ -54,9 +54,13 @@ public partial class OverlayWindow : Window
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _timer.Tick += (_, _) => { Render(); RefreshMedia(); };
 
+        _engine.PropertyChanged += OnEnginePropertyChanged;
+        _engine.VisualStateChanged += Render;
+
         _updatingVol = false; // 이후 슬라이더 변경은 사용자 조작으로 간주
 
         Loaded += (_, _) => { Render(); RefreshMedia(); };
+        Closed += (_, _) => OnClosedCleanup();
         IsVisibleChanged += (_, _) => { if (IsVisible) { Render(); _timer.Start(); } else _timer.Stop(); };
     }
 
@@ -75,7 +79,7 @@ public partial class OverlayWindow : Window
     }
 
     // ── 게이지 렌더 ──
-    private void Render()
+    public void Render()
     {
         TxtProgress.Text = $"{_engine.ProgressPercent:0}%";
         // 현재(또는 백그라운드 카운트 중인) 게임 이름 + 누적 플레이 시간(분:초)을 매초 갱신해 표시.
@@ -384,6 +388,22 @@ public partial class OverlayWindow : Window
             new Typeface(TxtMedia.FontFamily, TxtMedia.FontStyle, TxtMedia.FontWeight, TxtMedia.FontStretch),
             TxtMedia.FontSize, Brushes.White, pixelsPerDip);
         return ft.WidthIncludingTrailingWhitespace;
+    }
+
+    private void OnEnginePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DailyRunEngine.ProgressPercent)
+            or nameof(DailyRunEngine.ProgressText)
+            or nameof(DailyRunEngine.DisplayGameName)
+            or nameof(DailyRunEngine.DisplayPlaySeconds)
+            or nameof(DailyRunEngine.CurrentGameName))
+            Render();
+    }
+
+    private void OnClosedCleanup()
+    {
+        _engine.PropertyChanged -= OnEnginePropertyChanged;
+        _engine.VisualStateChanged -= Render;
     }
 
     private static string Fmt(TimeSpan t)

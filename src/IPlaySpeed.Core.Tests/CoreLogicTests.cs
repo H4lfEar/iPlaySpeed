@@ -272,3 +272,35 @@ public class LauncherFilterTests
     public void Empty_IsNotFiltered() =>
         Assert.False(LauncherFilter.IsLauncherOrHelper(""));
 }
+
+public class ProcessMatcherTests
+{
+    [Fact]
+    public void Hint_SubstringMatches() =>
+        Assert.True(ProcessMatcher.MatchesForegroundName("nikke-win64-shipping", null, new[] { "nikke" }));
+
+    [Fact]
+    public void Unrelated_DoesNotMatch() =>
+        Assert.False(ProcessMatcher.MatchesForegroundName("chrome", null, new[] { "nikke" }));
+
+    [Fact]
+    public void EffectiveName_ExactMatch() =>
+        Assert.True(ProcessMatcher.MatchesForegroundName("genshinimpact", "genshinimpact", Array.Empty<string>()));
+}
+
+public class ActionCompletionTests
+{
+    [Fact]
+    public void ActionMode_StillAutoCompletesByTime() =>
+        Assert.Equal(GameStatus.Completed,
+            CompletionJudge.Judge(new GameDailyState { ActivePlaySeconds = 360 }, 6, actionBased: true));
+
+    [Fact]
+    public void ActionMode_ManualComplete() =>
+        Assert.Equal(GameStatus.Completed,
+            CompletionJudge.Judge(new GameDailyState { ManualOverride = true }, 5, actionBased: true));
+
+    [Fact]
+    public void ActionMode_ProgressRatio_FollowsTime() =>
+        Assert.Equal(0.5, CompletionJudge.ProgressRatio(new GameDailyState { ActivePlaySeconds = 180 }, 6, actionBased: true), 9);
+}

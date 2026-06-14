@@ -65,11 +65,12 @@ public sealed class GameRow : INotifyPropertyChanged
     }
 
     /// <summary>엔진이 매 틱마다 호출해 상태/시간 표시를 갱신.</summary>
-    public void Refresh()
+    public void Refresh(bool actionBased = false)
     {
-        Status = CompletionJudge.Judge(State, Entry.ThresholdMinutes);
+        Status = CompletionJudge.Judge(State, Entry.ThresholdMinutes, actionBased);
         OnChanged(nameof(Minutes));
         OnChanged(nameof(StatusText));
+        OnChanged(nameof(IsCompleted));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

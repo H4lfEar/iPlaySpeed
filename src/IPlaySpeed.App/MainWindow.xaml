@@ -142,8 +142,8 @@
                                             <Border Background="#22000000" CornerRadius="5" Padding="4,1" Margin="0,0,6,0" VerticalAlignment="Center"
                                                     ToolTip="이 시간(분) 이상 실제 플레이하면 완료로 인정">
                                                 <StackPanel Orientation="Horizontal">
-                                                    <TextBox Width="28" Text="{Binding ThresholdMinutes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                             LostFocus="OnThresholdChanged" TextAlignment="Center"
+                                                    <TextBox Width="28" Text="{Binding ThresholdMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             TextChanged="OnThresholdChanged" LostFocus="OnThresholdChanged" TextAlignment="Center"
                                                              Background="Transparent" Foreground="{StaticResource TextBrush}" BorderThickness="0" />
                                                     <TextBlock Text="분" Foreground="{StaticResource SubtleBrush}" FontSize="11" VerticalAlignment="Center" />
                                                 </StackPanel>

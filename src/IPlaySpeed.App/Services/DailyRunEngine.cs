@@ -46,10 +46,18 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     /// <summary>게임별 최근 일별 실제 플레이 시간(초) 기록(완료 시간 자동 학습용).</summary>
     private readonly Dictionary<string, List<int>> _playLog;
 
-    // 백그라운드 카운트용 프로세스 경로 스냅샷 캐시(백그라운드 스레드에서 주기 갱신).
+    // 백그라운드 카운트·실행 감지용 프로세스 경로 스뺅샷(백그라운드 스레드에서 주기 갱신).
     private volatile List<string>? _cachedRunningPaths;
     private bool _snapshotBusy;
     private int _snapshotTick;
+
+    /// <summary>직전 틱의 게임별 실행 여부(종료→완료 감지용).</summary>
+    private readonly Dictionary<string, bool> _wasRunning = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>앱이 CloseGame으로 종료 중인 게임(종료 완료 시 완료 처리 스킵).</summary>
+    private readonly HashSet<string> _skipExitComplete = new(StringComparer.OrdinalIgnoreCase);
+
+    private bool ActionBased => _settings.ActionBasedCompletion;
 
     public ObservableCollection<GameRow> Rows { get; } = new();
 
@@ -82,6 +90,7 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
         bool changed = false;
         foreach (var row in Rows)
         {
+            if (row.Entry.ThresholdUserSet) continue;
             if (!_playLog.TryGetValue(row.Entry.Id, out var list)) continue;
             int suggested = CompletionJudge.SuggestThresholdMinutes(list);
             if (suggested > 0 && row.Entry.ThresholdMinutes != suggested)
@@ -90,7 +99,7 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
                 changed = true;
             }
         }
-        if (changed) { _library.Save(); foreach (var r in Rows) r.Refresh(); }
+        if (changed) { _library.Save(); foreach (var r in Rows) r.Refresh(ActionBased); }
     }
 
     /// <summary>하루 마감 시 각 게임의 실제 플레이 시간(초)을 기록하고(최근 14일), 학습 임계치를 갱신한다.</summary>
@@ -222,13 +231,20 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
         return -1;
     }
 
-    /// <summary>게임별 완료 임계 시간(분) 변경.</summary>
+    /// <summary>게임별 완료 임계 시간(분) 변경. 즉시 판정·오버레이에 반영.</summary>
     public void SetThreshold(GameRow row, int minutes)
     {
-        row.ThresholdMinutes = minutes; // 세터가 1~600으로 보정하고 변경 알림.
+        row.ThresholdMinutes = minutes;
+        row.Entry.ThresholdUserSet = true;
         _library.Save();
-        row.Refresh();
+        row.Refresh(ActionBased);
+        NotifyProgressChanged();
+        OnChanged(nameof(ProgressPercent));
+        VisualStateChanged?.Invoke();
     }
+
+    /// <summary>임계값·완료 상태 등 시각 표시 갱신이 필요할 때(오버레이 구독).</summary>
+    public event Action? VisualStateChanged;
 
     // ── 진행도 ──
     private double _progressPercent;
@@ -284,44 +300,48 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
 
         var (fg, fgPath) = ForegroundWatcher.ForegroundProcessInfo();
 
-        // 전역 '백그라운드도 카운트' 설정이 켜져 있으면 각 게임의 실제 게임 exe 실행 여부를 본다.
-        // 전체 프로세스 열거는 비싸서 UI 스레드를 멈추게 하므로(마퀴 끊김 원인) 백그라운드 스레드에서
-        // 주기적으로(약 2초) 계산해 캐시하고, 틱에서는 캐시만 읽는다(카운트는 최대 ~2초 지연 허용).
-        List<string>? runningPaths = null;
-        if (_settings.CountWhileRunning)
+        // 실행 중 프로세스 경로는 항상 ~2초마다 갱신(다중 실행·종료 감지·백그라운드 카운트에 사용).
+        List<string>? runningPaths = _cachedRunningPaths;
+        if (!_snapshotBusy && (_cachedRunningPaths is null || ++_snapshotTick >= 2))
         {
-            runningPaths = _cachedRunningPaths;
-            if (!_snapshotBusy && (_cachedRunningPaths is null || ++_snapshotTick >= 2))
-            {
-                _snapshotTick = 0;
-                _snapshotBusy = true;
-                Task.Run(() => SnapshotProcessPaths())
-                    .ContinueWith(t =>
-                    {
-                        if (t.IsCompletedSuccessfully) _cachedRunningPaths = t.Result;
-                        _snapshotBusy = false;
-                    }, TaskScheduler.FromCurrentSynchronizationContext());
-            }
-        }
-        else
-        {
-            _cachedRunningPaths = null;
+            _snapshotTick = 0;
+            _snapshotBusy = true;
+            Task.Run(() => SnapshotProcessPaths())
+                .ContinueWith(t =>
+                {
+                    if (t.IsCompletedSuccessfully) _cachedRunningPaths = t.Result;
+                    _snapshotBusy = false;
+                }, TaskScheduler.FromCurrentSynchronizationContext());
         }
 
         GameRow? current = null;
         foreach (var row in Rows)
         {
             bool isForeground = MatchesForeground(row.Entry, fg, fgPath);
+            bool isRunning = runningPaths is not null && IsRealGameRunning(row.Entry, runningPaths);
             bool count = isForeground
-                || (runningPaths is not null && IsRealGameRunning(row.Entry, runningPaths));
+                || (_settings.CountWhileRunning && isRunning);
+
+            if (ActionBased)
+            {
+                if (_wasRunning.TryGetValue(row.Entry.Id, out bool wasRunning) && wasRunning && !isRunning)
+                {
+                    if (_skipExitComplete.Remove(row.Entry.Id))
+                    { /* 앱이 닫은 경우 — Next에서 이미 완료 처리 */ }
+                    else if (row.State.ManualOverride != true)
+                        MarkComplete(row);
+                }
+                _wasRunning[row.Entry.Id] = isRunning;
+            }
+
             CompletionJudge.TickForeground(row.State, count);
             if (isForeground)
                 current = row;
-            row.Refresh();
+            row.Refresh(ActionBased);
         }
 
         var pairs = Rows.Select(r => (r.State, r.Entry.ThresholdMinutes)).ToList();
-        ProgressPercent = CompletionJudge.ProgressPercent(pairs);
+        ProgressPercent = CompletionJudge.ProgressPercent(pairs, ActionBased);
 
         foreach (var row in Rows)
             row.IsCurrent = row == current;
@@ -378,61 +398,95 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// 현재 실행 중인 게임을 닫고, '화면에 보이는 정렬 순서(Rows)' 기준으로
-    /// 아직 완료하지 않은 다음 게임을 실행한다. (정렬 순서 = 자동/수동 정렬 결과)
+    /// 「다음」: 단일 실행 → 완료 처리 + 다음 순번 포인터 이동(자동 실행 없음).
+    /// 다중 실행(2+) → 완료 없이 정렬상 마지막 실행 게임의 다음 게임 실행.
     /// </summary>
     public void NextGame()
     {
-        // (0) 진행도 리셋 직후라면 실행 중인 게임을 무시하고 무조건 맨 위(첫 미완료) 게임부터 실행.
         if (_restartFromTop)
         {
             _restartFromTop = false;
-            GameRow? first = FindNextToPlay(-1, null);
-            if (first is not null) { LaunchGame(first.Entry); _lastGameRow = first; }
+            _lastGameRow = FindNextToPlay(-1, null);
+            NotifyProgressChanged();
             return;
         }
 
-        GameRow? last = _lastGameRow;
-        bool running = last is not null && IsRealGameRunning(last.Entry);
-
-        // (A) 직전 게임이 아직 실행 중 → (설정에 따라) 닫고/그대로 둔 채 다음 미완료 게임으로 진행.
-        if (last is not null && running)
+        var running = GetRunningRows();
+        // #region agent log
+        DebugLog.Write("DailyRunEngine.NextGame", "Next pressed", new
         {
-            int idx = Rows.IndexOf(last);
-            if (_settings.CloseOnNext)
-                CloseGame(last.Entry, forceKill: true); // '바로 종료 후 다음 실행'
-            GameRow? next = FindNextToPlay(idx, last);
-            if (next is not null) { LaunchGame(next.Entry); _lastGameRow = next; }
-            return;
-        }
+            runningCount = running.Count,
+            runningNames = running.Select(r => r.Name).ToArray(),
+            lastGame = _lastGameRow?.Name
+        }, "H3");
+        // #endregion
 
-        // (B) 직전 게임이 이미 꺼졌고 '임계 시간 미만(미완료)'이면 → 같은 게임을 다시 실행한다.
-        //     (업데이트로 게임이 스스로 재시작/종료된 경우 등.)
-        if (last is not null && !last.IsCompleted)
+        if (running.Count >= 2)
         {
-            LaunchGame(last.Entry); // _lastGameRow 유지
+            GameRow anchor = running.OrderBy(r => Rows.IndexOf(r)).Last();
+            int idx = Rows.IndexOf(anchor);
+            for (int step = 1; step <= Rows.Count; step++)
+            {
+                int nextIdx = (idx + step) % Rows.Count;
+                GameRow candidate = Rows[nextIdx];
+                if (IsRealGameRunning(candidate.Entry))
+                    continue;
+                LaunchGame(candidate.Entry);
+                _lastGameRow = candidate;
+                break;
+            }
             return;
         }
 
-        // (C) 직전 게임이 없거나 이미 완료됨 → 정렬 맨 위(직전이 있으면 그 다음)부터 첫 미완료 실행.
-        int startIdx = last is not null ? Rows.IndexOf(last) : -1;
-        GameRow? n = FindNextToPlay(startIdx, last);
-        if (n is not null) { LaunchGame(n.Entry); _lastGameRow = n; }
+        // 단일(또는 0): 직전/유일 실행 게임 완료 → 다음 미완료로 포인터만 이동
+        GameRow? target = running.FirstOrDefault() ?? _lastGameRow;
+        if (target is not null && !target.IsCompleted)
+            MarkComplete(target);
+
+        if (_settings.CloseOnNext && target is not null && IsRealGameRunning(target.Entry))
+            CloseGame(target.Entry, forceKill: true, skipExitComplete: true);
+
+        int startIdx = target is not null ? Rows.IndexOf(target) : -1;
+        _lastGameRow = FindNextToPlay(startIdx, null);
+        NotifyProgressChanged();
     }
 
-    /// <summary>
-    /// 특정 게임을 바로 실행한다(오버레이 아이콘 클릭용). 전역 설정 CloseOnNext를 따라
-    /// 현재 실행 중인 직전 게임을 종료할지 결정한다.
-    /// </summary>
+    /// <summary>오버레이 아이콘 클릭 — 실행만(다른 게임 종료·완료 없음).</summary>
     public void PlayGame(GameRow row)
     {
-        if (_settings.CloseOnNext && _lastGameRow is not null && _lastGameRow != row
-            && IsRealGameRunning(_lastGameRow.Entry))
-            CloseGame(_lastGameRow.Entry, forceKill: true);
-
         LaunchGame(row.Entry);
         _lastGameRow = row;
         _restartFromTop = false;
+        _wasRunning[row.Entry.Id] = true;
+    }
+
+    private void MarkComplete(GameRow row)
+    {
+        if (row.State.ManualOverride == true)
+            return;
+        row.State.ManualOverride = true;
+        row.Refresh(ActionBased);
+        NotifyProgressChanged();
+        SaveStates();
+        // #region agent log
+        DebugLog.Write("DailyRunEngine.MarkComplete", "Marked complete", new { game = row.Name }, "H3");
+        // #endregion
+    }
+
+    private void NotifyProgressChanged()
+    {
+        var pairs = Rows.Select(r => (r.State, r.Entry.ThresholdMinutes)).ToList();
+        ProgressPercent = CompletionJudge.ProgressPercent(pairs, ActionBased);
+        OnChanged(nameof(ProgressText));
+        OnChanged(nameof(CompletedCount));
+        OnChanged(nameof(NextWaitingGameName));
+    }
+
+    /// <summary>현재 실제 게임 exe가 실행 중인 Rows.</summary>
+    private List<GameRow> GetRunningRows()
+    {
+        var paths = _cachedRunningPaths ?? SnapshotProcessPaths();
+        return Rows.Where(r => IsRealGameRunning(r.Entry, paths)).ToList();
     }
 
     /// <summary>
@@ -442,12 +496,8 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     public void ToggleComplete(GameRow row)
     {
         row.State.ManualOverride = row.State.ManualOverride == true ? null : true;
-        row.Refresh();
-        var pairs = Rows.Select(r => (r.State, r.Entry.ThresholdMinutes)).ToList();
-        ProgressPercent = CompletionJudge.ProgressPercent(pairs);
-        OnChanged(nameof(ProgressText));
-        OnChanged(nameof(CompletedCount));
-        OnChanged(nameof(NextWaitingGameName));
+        row.Refresh(ActionBased);
+        NotifyProgressChanged();
         SaveStates();
     }
 
@@ -543,6 +593,20 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
                     return true;
             }
         }
+
+        foreach (var f in runningPaths)
+        {
+            try
+            {
+                string name = Path.GetFileNameWithoutExtension(f);
+                if (LauncherFilter.IsLauncherOrHelper(name))
+                    continue;
+                if (ProcessMatcher.MatchesExecutablePath(f, entry.EffectiveGameProcessName(), entry.AllProcessHints()))
+                    return true;
+            }
+            catch { /* 무시 */ }
+        }
+
         if (string.Equals(entry.LauncherType, "none", StringComparison.OrdinalIgnoreCase))
         {
             string pname = entry.EffectiveGameProcessName();
@@ -582,12 +646,9 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     {
         ResetDay(recordPlay: false); // 수동 초기화는 부분 플레이라 학습 기록에 넣지 않음
         _lastGameRow = null;
-        _restartFromTop = true; // 다음 '다음' 클릭은 실행 중 무시하고 맨 위 게임부터
-        var pairs = Rows.Select(r => (r.State, r.Entry.ThresholdMinutes)).ToList();
-        ProgressPercent = CompletionJudge.ProgressPercent(pairs);
-        OnChanged(nameof(ProgressText));
-        OnChanged(nameof(CompletedCount));
-        OnChanged(nameof(NextWaitingGameName));
+        _restartFromTop = true;
+        _wasRunning.Clear();
+        NotifyProgressChanged();
     }
 
     /// <summary>
@@ -605,17 +666,43 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
             {
                 string full = Path.GetFullPath(fgPath!);
                 if (full.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
-                    return IsRealGameExe(entry, full);
+                {
+                    bool pathMatch = IsRealGameExe(entry, full);
+                    // #region agent log
+                    if (!pathMatch && (entry.Name.Contains("NIKKE", StringComparison.OrdinalIgnoreCase)
+                        || entry.ProcessHints.Any(h => h.Contains("nikke", StringComparison.OrdinalIgnoreCase))))
+                    {
+                        DebugLog.Write("DailyRunEngine.MatchesForeground", "Path in folder but not real game exe", new
+                        {
+                            game = entry.Name,
+                            fgName,
+                            fgPath = full,
+                            launcherType = entry.LauncherType
+                        }, "H2");
+                    }
+                    // #endregion
+                    if (pathMatch) return true;
+                }
             }
             catch { /* 경로 비교 실패 무시 */ }
         }
-
+        else if (folder is not null && string.IsNullOrEmpty(fgPath)
+                 && (entry.Name.Contains("NIKKE", StringComparison.OrdinalIgnoreCase)
+                     || entry.ProcessHints.Any(h => h.Contains("nikke", StringComparison.OrdinalIgnoreCase))))
+        {
+            // #region agent log
+            DebugLog.Write("DailyRunEngine.MatchesForeground", "fgPath null", new { game = entry.Name, fgName }, "H2");
+            // #endregion
+        }
         if (string.Equals(entry.LauncherType, "none", StringComparison.OrdinalIgnoreCase))
         {
-            string pname = entry.EffectiveGameProcessName().ToLowerInvariant();
-            if (!string.IsNullOrEmpty(pname) && pname == fgName)
+            string pname = entry.EffectiveGameProcessName();
+            if (ProcessMatcher.MatchesForegroundName(fgName, pname, entry.ProcessHints))
                 return true;
         }
+        else if (!LauncherFilter.IsLauncherOrHelper(fgName)
+                 && ProcessMatcher.MatchesForegroundName(fgName, null, entry.AllProcessHints()))
+            return true;
         return false;
     }
 
@@ -623,8 +710,11 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     /// 게임을 닫는다. forceKill=false면 정상 종료 시도 후 5초 뒤에도 살아있으면 강제 종료(저장 보호),
     /// forceKill=true면 즉시 강제 종료(라이브 서비스 게임용 옵션).
     /// </summary>
-    public void CloseGame(GameEntry entry, bool forceKill = false)
+    public void CloseGame(GameEntry entry, bool forceKill = false, bool skipExitComplete = false)
     {
+        if (skipExitComplete)
+            _skipExitComplete.Add(entry.Id);
+
         var targets = new Dictionary<int, Process>();
 
         // (1) 등록된 프로세스 이름으로 찾기
@@ -698,7 +788,7 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
             true => false,
             false => null
         };
-        row.Refresh();
+        row.Refresh(ActionBased);
         SaveStates();
     }
 
@@ -742,9 +832,10 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
             row.State.ActivePlaySeconds = 0;
             row.State.UpdateDetectedToday = false;
             row.State.ManualOverride = null;
-            row.Refresh();
+            row.Refresh(ActionBased);
         }
         _lastGameRow = null;
+        _wasRunning.Clear();
         _settings.LastReset = DateTime.Now;
         _dayRecorded = false;
         _store.Save(AppPaths.SettingsFile, _settings);
