@@ -158,11 +158,10 @@ Windows API/UI는 `IPlaySpeed.App`에만 둔다. 새 로직 추가 시 가능하
   PROCESS_QUERY_LIMITED_INFORMATION)로 얻는다. → **관리자 권한 게임(안티치트, HoYo 등)도 경로를 읽어**
   폴더 매칭이 동작한다. (구버전의 `MainModule.FileName`은 권한 부족으로 null이 되어 시간이 안 쌓였음)
 
-**다음 게임 — `NextGame()`** (2026-06-14, `tasks/iPlaySpeed/HANDOFF.md` 참고):
-- **실행 중 2개+**: 완료 없음. `Rows` **인덱스 최대** 실행 게임 다음 순번 중 **미실행** 게임 `LaunchGame`.
-- **실행 0~1개**: `_lastGameRow` 완료 → (`CloseOnNext`) 종료 → 다음 미완료로 **포인터만** (Launch 없음).
-- `_lastGameRow` / `IsRealGameRunning` / `FindNextToPlay` — 볼륨·다음 기준은 `_currentRow`가 아님.
-- `ForceResetProgress` 후 첫 「다음」: 첫 미완료 포인터만.
+**다음 게임 — `NextGame()`**:
+- 현재(또는 유일) 실행 게임 **완료** → (`CloseOnNext`) **종료** → `Rows` **맨 위부터 첫 미완료** 실행.
+- 이미 완료된 게임(예: 2번)을 다시 플레이 중이어도, 1~3 완료면 **4번** 실행.
+- 첫 미완료가 이미 실행 중이면 launch 생략.
 
 **아이콘 실행 — `PlayGame(row)`**: Launch만. 타 게임 종료·완료 없음.
 

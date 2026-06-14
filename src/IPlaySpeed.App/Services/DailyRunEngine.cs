@@ -398,16 +398,15 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// 「다음」: 단일 실행 → 완료 처리 + 다음 순번 포인터 이동(자동 실행 없음).
-    /// 다중 실행(2+) → 완료 없이 정렬상 마지막 실행 게임의 다음 게임 실행.
+    /// 「다음」: 현재(또는 유일) 실행 게임 완료 → (CloseOnNext) 종료 →
+    /// 표시 순서상 <b>첫 미완료</b> 게임 실행(현재 플레이 중인 순번과 무관).
     /// </summary>
     public void NextGame()
     {
         if (_restartFromTop)
         {
             _restartFromTop = false;
-            _lastGameRow = FindNextToPlay(-1, null);
-            NotifyProgressChanged();
+            AdvanceToFirstIncompleteAndLaunch();
             return;
         }
 
@@ -421,33 +420,26 @@ public sealed class DailyRunEngine : INotifyPropertyChanged, IDisposable
         }, "H3");
         // #endregion
 
-        if (running.Count >= 2)
-        {
-            GameRow anchor = running.OrderBy(r => Rows.IndexOf(r)).Last();
-            int idx = Rows.IndexOf(anchor);
-            for (int step = 1; step <= Rows.Count; step++)
-            {
-                int nextIdx = (idx + step) % Rows.Count;
-                GameRow candidate = Rows[nextIdx];
-                if (IsRealGameRunning(candidate.Entry))
-                    continue;
-                LaunchGame(candidate.Entry);
-                _lastGameRow = candidate;
-                break;
-            }
-            return;
-        }
+        GameRow? target = (_lastGameRow is not null && IsRealGameRunning(_lastGameRow.Entry))
+            ? _lastGameRow
+            : running.FirstOrDefault() ?? _lastGameRow;
 
-        // 단일(또는 0): 직전/유일 실행 게임 완료 → 다음 미완료로 포인터만 이동
-        GameRow? target = running.FirstOrDefault() ?? _lastGameRow;
         if (target is not null && !target.IsCompleted)
             MarkComplete(target);
 
         if (_settings.CloseOnNext && target is not null && IsRealGameRunning(target.Entry))
             CloseGame(target.Entry, forceKill: true, skipExitComplete: true);
 
-        int startIdx = target is not null ? Rows.IndexOf(target) : -1;
-        _lastGameRow = FindNextToPlay(startIdx, null);
+        AdvanceToFirstIncompleteAndLaunch();
+    }
+
+    /// <summary>Rows 맨 위부터 첫 미완료로 포인터 이동 후, 실행 중이 아니면 launch.</summary>
+    private void AdvanceToFirstIncompleteAndLaunch()
+    {
+        var next = FindNextToPlay(-1, null);
+        _lastGameRow = next;
+        if (next is not null && !IsRealGameRunning(next.Entry))
+            LaunchGame(next.Entry);
         NotifyProgressChanged();
     }
 

@@ -30,6 +30,11 @@ if errorlevel 1 (
 echo.
 echo [*] Closing any running iPlaySpeed instance (avoids file-lock build error)...
 taskkill /IM iPlaySpeed.exe /F >nul 2>nul
+tasklist /FI "IMAGENAME eq iPlaySpeed.exe" 2>nul | find /I "iPlaySpeed.exe" >nul
+if not errorlevel 1 (
+  echo [!] Admin instance detected — UAC will appear to close iPlaySpeed...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process taskkill -ArgumentList '/F /IM iPlaySpeed.exe' -Verb RunAs -Wait"
+)
 
 echo.
 echo [2/2] Building and launching the app...
